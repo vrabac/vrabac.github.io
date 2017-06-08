@@ -14,6 +14,7 @@ This assumes you have already some Linux knowledge and that you have Arch Linux 
 
 ## Requirements
 * Khadas Vim Pro (I have only Pro version)
+* Linux u-boot (from an Khadas Image release) as the Android u-boot does currently not support ext4load.
 * USB to Serial TTL cable (this is needed to set boot parameters, for instruction how to test and setup this please see [Khadas docs](http://docs.khadas.com/develop/SetupSerialTool/) page)
 * micro SD card (tested with 2GB)
 * Arch Linux installation on host device (other Linux flavor should work to)
@@ -245,6 +246,30 @@ delete the alarm user (-r = remove home directory and mail spool), we are going 
 ```bash
 [root@alarm ~]# userdel -r alarm
 ```
+language and locale settings /etc/locale.gen and /etc/locale.conf
+```bash
+[root@alarm ~]# vim /etc/locale.gen
+[root@alarm ~]# grep -v "^#" /etc/locale.gen
+en_DK.UTF-8 UTF-8
+en_US.UTF-8 UTF-8
+```
+```bash
+[root@alarm ~]# locale-gen
+Generating locales...
+  en_DK.UTF-8... done
+  en_US.UTF-8... done
+Generation complete.
+```
+```bash
+[root@alarm ~]# vim /etc/locale.conf
+[root@alarm ~]# grep -v "^#" /etc/locale.conf
+LANG=en_US.UTF-8
+LC_COLLATE=C
+LC_DATE=en_DK.utf8
+LC_NUMERIC=en_DK.utf8
+LC_TIME=en_DK.utf8
+```
+
 ## ToDo:
 - [ ] u-boot command store
 - [ ] WiFi Network setup
@@ -252,13 +277,16 @@ delete the alarm user (-r = remove home directory and mail spool), we are going 
 
 ## Know Problems:
   * USB is not supported on the mainline Linux Kernel yet, see [linux-meson](http://linux-meson.com/doku.php#wip) (Khadas VIM uses the S905X SoC, also called GXL -> USB is still work-in-progress
-
+  * WiFi problem reported and solved, info could be found [here](http://lists.infradead.org/pipermail/linux-amlogic/2017-June/003864.html)
+  * Ethernet problems: sometimes detected only as 10Mbps and with 4.12-rc4 download will stale and SSH session would be disconnected. Reported [here](http://lists.infradead.org/pipermail/linux-amlogic/2017-June/003939.html)
 ## Authors and docummentation:
   * Martin Blumenstingl - Biggest part of this instruction is written by him (developer who is contributing code so we have our device working with mainline Kernel).
   * ArchLinuxArm wiki - some part are from ArchLinuxARM installation page
   * Me (vrabac) - and of course some stuff are written from me. I tested this and would like to give it to community so everyone can prepare ArchLinuxARM working on Khadas Vim device (this HowTo should work with some adjustment with any other arm device)
 
 ## Change log:
+- 20170608: know problems with WiFI and Ethernet
+- 20170607: language and locale settings
 - 20170606: retyped in GitHub Markdown
 - 20170527: added Authors topic
 - 20170526: added basic system setup
