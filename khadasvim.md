@@ -22,6 +22,11 @@ This assumes you have already some Linux knowledge and that you have Arch Linux 
 
 >Do everything as root (not via sudo)!
 
+# Hardware information
+* Ethernet uses an internal MII link with an internal 10/100 Ethernet PHY (meson8b-dwmac driver). Quick summary how Ethernet works (VERY simplified version): there's an Ethernet controller which is responsible for transferring data over the line and there's an Ethernet PHY which is responsible for negotiating speeds (and all other connection parameters)
+* Wireless AP6255-based SDIO WiFi (RPi3 uses the same brcmfmac driver with other SDIO host driver and there are also lot of complaints about poor Wifi performance.)
+
+
 ## Preparation
 Plug micro SD card to your machine where you have Linux running and find which device it is.
 ```bash
@@ -276,16 +281,18 @@ LC_TIME=en_DK.utf8
 - [ ] write ArchLinuxArm to eMMC Storage of Khadas VIM device
 
 ## Know Problems:
-  * USB is not supported on the mainline Linux Kernel yet, see [linux-meson](http://linux-meson.com/doku.php#wip) (Khadas VIM uses the S905X SoC, also called GXL -> USB is still work-in-progress
-  * WiFi problem reported and solved, info could be found [here](http://lists.infradead.org/pipermail/linux-amlogic/2017-June/003864.html)
-  * Ethernet problems: sometimes detected only as 10Mbps and with 4.12-rc4 download will stale and SSH session would be disconnected. Reported [here](http://lists.infradead.org/pipermail/linux-amlogic/2017-June/003939.html)
+- [ ] USB is not supported on the mainline Linux Kernel yet, see [linux-meson](http://linux-meson.com/doku.php#wip) (Khadas VIM uses the S905X SoC, also called GXL -> USB is still work-in-progress)
+- [x] WiFi problem reported, solved with Heiner Kallweit patch, more about can be be found [here](http://lists.infradead.org/pipermail/linux-amlogic/2017-June/003864.html).
+- [ ] Ethernet problems: sometimes detected only as 10Mbps and with 4.12-rc4 download will stall and SSH session would be disconnected. Reported [here](http://lists.infradead.org/pipermail/linux-amlogic/2017-June/003939.html)
+
 ## Authors and docummentation:
   * Martin Blumenstingl - Biggest part of this instruction is written by him (developer who is contributing code so we have our device working with mainline Kernel).
   * ArchLinuxArm wiki - some part are from ArchLinuxARM installation page
   * Me (vrabac) - and of course some stuff are written from me. I tested this and would like to give it to community so everyone can prepare ArchLinuxARM working on Khadas Vim device (this HowTo should work with some adjustment with any other arm device)
 
 ## Change log:
-- 20170608: know problems with WiFI and Ethernet
+- 20170611: added hardware information section, moved know problems to task list
+- 20170608: requirements (u-boot); know problems with WiFI and Ethernet
 - 20170607: language and locale settings
 - 20170606: retyped in GitHub Markdown
 - 20170527: added Authors topic
