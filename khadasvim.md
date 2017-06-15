@@ -22,7 +22,7 @@ This assumes you have already some Linux knowledge and that you have Arch Linux 
 
 >Do everything as root (not via sudo)!
 
-# Hardware information
+## Hardware information
 * Ethernet uses an internal MII link with an internal 10/100 Ethernet PHY (meson8b-dwmac driver). Quick summary how Ethernet works (VERY simplified version): there's an Ethernet controller which is responsible for transferring data over the line and there's an Ethernet PHY which is responsible for negotiating speeds (and all other connection parameters)
 * Wireless AP6255-based SDIO WiFi (RPi3 uses the same brcmfmac driver with other SDIO host driver and there are also lot of complaints about poor Wifi performance.)
 
@@ -41,13 +41,32 @@ In this log above it is an `sdb` device and it will be used in whole HowTo. Repl
 
 >**Disclaimer:** double check that you really use your micro SD device otherwise you could destroy your data on main computer or any other connected device (better unplug all not needed USB devices).
 
-1. Zero the beginning of the micro SD card:
+1. For pacman-key signature verification for **ArchLinux** only please edit gpg.conf file and add content below.
+```bash
+# vim /etc/pacman.d/gnupg/gpg.conf
+# cat /etc/pacman.d/gnupg/gpg.conf
+no-greeting
+no-permission-warning
+lock-never
+keyserver http://pgp.mit.edu
+#keyserver hkp://pool.sks-keyservers.net
+keyserver-options timeout=10
+```
+Download ArchLinuxArm keyring file, sign it locally and to check verification.
+```bash
+# curl -O http://ftp.halifax.rwth-aachen.de/archlinux-arm/aarch64/core/archlinuxarm-keyring-20140119-1-any.pkg.tar.xz
+# curl -O http://ftp.halifax.rwth-aachen.de/archlinux-arm/aarch64/core/archlinuxarm-keyring-20140119-1-any.pkg.tar.xz.sig
+# pacman-key --lsign-key builder@archlinuxarm.org
+# pacman -U /opt/archlinuxarm-keyring-20140119-1-any.pkg.tar.xz
+```
+
+2. Zero the beginning of the micro SD card:
 ```bash
 # dd if=/dev/zero of=/dev/sdb bs=1M count=8
 ```
-2. Start fdisk to partition the micro SD card:
+3. Start fdisk to partition the micro SD card:
 `# fdisk /dev/sdb`
-3. At the fdisk prompt, create the new partitions:
+4. At the fdisk prompt, create the new partitions:
   * Type **o**. This will clear out any partitions on the drive.
   * Type **p** to list partitions. There should be no partitions left.
   * Type **n**, then **p** for primary, **1** for the first partition on the drive, and **enter** twice to accept the default starting and ending sectors.
@@ -61,15 +80,15 @@ Device     Boot Start     End Sectors  Size Id Type
 /dev/sdb1        2048 3921919 3919872  1,9G 83 Linux
 #
 ```
-4. Create the ext4 file system:
+5. Create the ext4 file system:
   * For e2fsprogs < 1.43: `# mkfs.ext4 /dev/sdb1`
   * For e2fsprogs >= 1.43: `# mkfs.ext4 -O ^metadata_csum,^64bit /dev/sdb1`
-5. Mount the file system. I am going to do everything in **/opt** . Make sure to have at least 1GB of free space available on your host machine under **/opt**.
+6. Mount the file system. I am going to do everything in **/opt** . Make sure to have at least 1GB of free space available on your host machine under **/opt**.
 ```bash
 # mkdir -p /opt/root
 # mount /dev/sdb1 /opt/root
 ```
-6. Download and extract the root file system:
+7. Download and extract the root file system:
 ```bash
 # cd /opt
 # wget http://archlinuxarm.org/os/ArchLinuxARM-aarch64-latest.tar.gz
@@ -83,25 +102,25 @@ Device     Boot Start     End Sectors  Size Id Type
 # bsdtar -xpf ArchLinuxARM-aarch64-latest.tar.gz -C root/
 # sync
 ```
-7. Now that we have rootfs on our micro SD card, lets download latest mainline Kernel. In time of writing this HowTo that is 4.12-rc2
+8. Now that we have rootfs on our micro SD card, lets download latest mainline Kernel. In time of writing this HowTo that is 4.12-rc2
 ```bash
-# wget http://ftp.halifax.rwth-aachen.de/archlinux-arm/aarch64/core/linux-aarch64-rc-4.12.rc2-1-aarch64.pkg.tar.xz
-# wget http://ftp.halifax.rwth-aachen.de/archlinux-arm/aarch64/core/linux-aarch64-rc-4.12.rc2-1-aarch64.pkg.tar.xz.sig
-# pacman-key -v linux-aarch64-rc-4.12.rc2-1-aarch64.pkg.tar.xz.sig
+# wget http://ftp.halifax.rwth-aachen.de/archlinux-arm/aarch64/core/linux-aarch64-rc-4.12.rc5-1-aarch64.pkg.tar.xz
+# wget http://ftp.halifax.rwth-aachen.de/archlinux-arm/aarch64/core/linux-aarch64-rc-4.12.rc5-1-aarch64.pkg.tar.xz.sig
+# pacman-key -v linux-aarch64-rc-4.12.rc5-1-aarch64.pkg.tar.xz.sig
 ```
-8. We will need to force install Kernel, once booted into ArchLinuxARM, to have all files in right place. So move to micro SD card for later install:
+9. We will need to force install Kernel, once booted into ArchLinuxARM, to have all files in right place. So move to micro SD card for later install:
 ```bash
-# cp linux-aarch64-rc-4.12.rc2-1-aarch64.pkg.tar.xz root/opt/
+# cp linux-aarch64-rc-4.12.rc5-1-aarch64.pkg.tar.xz root/opt/
 ```
-9. for booting Khadas VIM we need these files on micro SD boot directory:
+10. for booting Khadas VIM we need these files on micro SD boot directory:
 ```bash
 # mkdir kernel
-# bsdtar -xpf linux-aarch64-rc-4.12.rc2-1-aarch64.pkg.tar.xz -C kernel/
+# bsdtar -xpf linux-aarch64-rc-4.12.rc5-1-aarch64.pkg.tar.xz -C kernel/
 # cp -p kernel/boot/Image* root/boot/
 # cp -R kernel/boot/dtbs/* root/boot/dtbs/
 # sync
 ```
-10. on host machine install uboot-tools and create uImage (includes the OS type and loader information) which is needed by u-boot:
+11. on host machine install uboot-tools and create uImage (includes the OS type and loader information) which is needed by u-boot:
 ```shell
 # pacman -S uboot-tools
 # mkimage -A arm64 -O linux -T kernel -C none -a 0x1080000 -e 0x1080000 -n "Arch Linux ARM kernel" -d root/boot/Image root/boot/uImage
@@ -115,7 +134,7 @@ Data Size:    21561856 Bytes = 21056.50 KiB = 20.56 MiB
 Load Address: 01080000
 Entry Point:  01080000
 ```
-11. Unmount the partition:
+12. Unmount the partition:
 ` # umount /opt/root`
 
 ## On Khadas VIM Pro
@@ -133,7 +152,7 @@ kvim#
 ```
 2. Now in u-boot run the following commands:
 ```bash
-kvim# setenv bootargs "console=ttyAML0,115200 root=/dev/mmcblk0p1 rootwait=1 rootdelay=2 rw init=/usr/bin/init"
+kvim# setenv bootargs "console=ttyAML0,115200 root=/dev/mmcblk0p1 rootwait=1 rootdelay=2 rw ipv6.disable=1 init=/usr/bin/init"
 kvim# ext4load mmc 0:1 ${loadaddr} /boot/uImage
 kvim# ext4load mmc 0:1 $dtb_mem_addr /boot/dtbs/amlogic/meson-gxl-s905x-khadas-vim.dtb
 ```
@@ -143,7 +162,7 @@ kvim# bootm ${loadaddr} - $dtb_mem_addr
 ```
 3. Login into your newly installed ArchLinuxARM  with user: **root** and password: **root**
 ```session
-Arch Linux 4.12.0-rc2-1-ARCH (ttyAML0)
+Arch Linux 4.12.0-rc5-1-ARCH (ttyAML0)
 alarm login: root
 Password:
 [root@alarm ~]#
@@ -154,18 +173,18 @@ Check if we have any network device
 lo
 [root@alarm ~]#
 ```
-4. As long as ArchLinuxARM still ships Kernel v4.10.13-1 by default we need to do following to have newest Kernel installed:
+4. As long as ArchLinuxARM still ships Kernel v4.11.X by default we need to do following to have newest Kernel installed:
 ```bash
-[root@alarm ~]# pacman -U --force /opt/linux-aarch64-rc-4.12.rc2-1-aarch64.pkg.tar.xz
+[root@alarm ~]# pacman -U --force /opt/linux-aarch64-rc-4.12.rc5-1-aarch64.pkg.tar.xz
 ```
   When asked to remove linux-aarch64 Kernel and install linux-aarch64-rc press **y**.
 
-  Reboot the system but please note you need to stop autoboot and to re-enter again all u-boot commands from above
+  Reboot the system but please note you need to **stop autoboot** and to re-enter again all u-boot commands from above
 `[root@alarm ~]# systemctl reboot`
 5. As soon as you see u-boot stuff hit Enter or space or Ctrl+C key to stop autoboot.
   Now in u-boot run again the following commands:
 ```bash  
-kvim# setenv bootargs "console=ttyAML0,115200 root=/dev/mmcblk0p1 rootwait=1 rootdelay=2 rw init=/usr/bin/init"
+kvim# setenv bootargs "console=ttyAML0,115200 root=/dev/mmcblk0p1 rootwait=1 rootdelay=2 rw ipv6.disable=1 init=/usr/bin/init"
 kvim# ext4load mmc 0:1 ${loadaddr} /boot/uImage
 kvim# ext4load mmc 0:1 $dtb_mem_addr /boot/dtbs/amlogic/meson-gxl-s905x-khadas-vim.dtb
 ```
@@ -175,7 +194,7 @@ kvim# bootm ${loadaddr} - $dtb_mem_addr
 ```
 6. Login again into your newly installed ArchLinuxARM and check if you see now any network device
 ```session
-Arch Linux 4.12.0-rc2-1-ARCH (ttyAML0)
+Arch Linux 4.12.0-rc5-1-ARCH (ttyAML0)
 alarm login: root
 Password:
 [root@alarm ~]# ls /sys/class/net
@@ -195,11 +214,58 @@ Created symlink /etc/systemd/system/multi-user.target.wants/dhcpcd@eth0.service 
 ```bash
 [root@alarm ~]# pacman -Sy openssh vim lshw
 [root@alarm ~]# sed -i -e 's/\#PermitRootLogin.*/PermitRootLogin yes/' /etc/ssh/sshd_config
-[root@alarm ~]# systemctl start sshd
+[root@alarm ~]# systemctl restart sshd
 ```
 
 **Now you have successful installed ArchLinuxARM on your Khadas VIM device. This is initial HowTo commit and with the Time I will add/change/remove some stuff as ArchLinuxARM or Kernel evolves.**
 
+## Autoboot ArchLinuxARM
+If you decide to autoboot ArchLinuxARM from micro SD device do following.
+
+1. Reboot the system but please note you need to **stop autoboot** and to enter following u-boot commands.
+```bash
+[root@alarm ~]# systemctl reboot
+```
+2. As soon as you see u-boot stuff hit Enter or space or Ctrl+C key to stop autoboot.
+Now in u-boot save the output from **printenv** in case you need to boot image from eMMC again. Khadas Android and Ubuntu image have different u-boot and also use different ethaddr (which for me breaks DHCP reservation), so I set this value to Khadas Ubuntu defaults.
+I also found that u-boot which will be flashed with Android Nougat have different Ethernet MAC address as well as some u-boot parameter which overwrites on start/reset the bootargs, so we set them to not defined. This is not clean way of doing it but it works.
+So firstly print the current u-boot values for backup and store them somewhere on your workstation.
+```bash
+kvim# printenv bootargs
+kvim# printenv bootcmd
+kvim# printenv ethaddr
+```
+Android u-boot start. Change the Ethernet 'XX' to your values.
+```bash
+kvim# printenv cmdline_keys
+kvim# printenv recovery_from_flash
+kvim# printenv storeargs
+kvim# printenv recovery_from_sdcard
+kvim# printenv recovery_from_udisk
+```
+```bash
+kvim# setenv ethaddr 00:15:18:XX:XX:XX
+kvim# setenv ipaddr 1X.XX.XX.XX
+kvim# setenv gatewayip 1X.XX.XX.XX
+kvim# setenv serverip 1X.XX.XX.XX
+kvim# setenv cmdline_keys
+kvim# setenv recovery_from_flash
+kvim# setenv storeargs
+kvim# setenv recovery_from_sdcard
+kvim# setenv recovery_from_udisk
+```
+Android u-boot end.
+
+3. Set the new bootargs and bootcmd to autoboot ArchLinuxArm from first partition on micro SD card. This is valid for any u-boot.
+```bash
+kvim# setenv bootargs "console=ttyAML0,115200 root=/dev/mmcblk0p1 rootwait=1 rootdelay=2 rw ipv6.disable=1 init=/usr/bin/init"
+kvim# setenv bootcmd "ext4load mmc 0:1 ${loadaddr} /boot/uImage; ext4load mmc 0:1 $dtb_mem_addr /boot/dtbs/amlogic/meson-gxl-s905x-khadas-vim.dtb; bootm ${loadaddr} - $dtb_mem_addr"
+kvim# saveenv
+```
+4. If everything successful then do an reset to check Autoboot.
+```bash
+kvim# reset
+```
 ## Some information from ArchLinuxARM wiki:
 The default configuration of the userspace is:
 - Packages in the base group, Kernel firmware and utilities, openssh, and haveged
@@ -276,7 +342,7 @@ LC_TIME=en_DK.utf8
 ```
 
 ## ToDo:
-- [ ] u-boot command store
+- [x] u-boot command store
 - [ ] WiFi Network setup
 - [ ] write ArchLinuxArm to eMMC Storage of Khadas VIM device
 
@@ -291,6 +357,8 @@ LC_TIME=en_DK.utf8
   * Me (vrabac) - and of course some stuff are written from me. I tested this and would like to give it to community so everyone can prepare ArchLinuxARM working on Khadas Vim device (this HowTo should work with some adjustment with any other arm device)
 
 ## Change log:
+- 20170615: added ArchLinuxArm keyring and instruction how to use it on ArchLinux. Autboot to ArchLinuxArm on first partition of micro SD card.
+- 20170613: added 'ipv6.disable' to bootargs
 - 20170611: added hardware information section, moved know problems to task list
 - 20170608: requirements (u-boot); know problems with WiFI and Ethernet
 - 20170607: language and locale settings
