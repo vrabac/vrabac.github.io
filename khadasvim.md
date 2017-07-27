@@ -14,7 +14,8 @@ This assumes you have already some Linux knowledge and that you have Arch Linux 
 
 ## Requirements
 * Khadas Vim Pro (I have only Pro version)
-* Linux u-boot (from an Khadas Image release) as the Android u-boot does currently not support ext4load.
+* ~~Linux u-boot (from an Khadas Image release) as the Android u-boot does currently not support ext4load (`Unknown command 'ext4load' - try 'help'`).~~
+* Android u-boot is needed as multiboot can only be activated here. **This setup need an FAT32 partition!**
 * USB to Serial TTL cable (this is needed to set boot parameters, for instruction how to test and setup this please see [Khadas docs](http://docs.khadas.com/develop/SetupSerialTool/) page)
 * micro SD card (tested with 2GB)
 * Arch Linux installation on host device (other Linux flavor should work to)
@@ -41,7 +42,7 @@ In this log above it is an `sdb` device and it will be used in whole HowTo. Repl
 
 >**Disclaimer:** double check that you really use your micro SD device otherwise you could destroy your data on main computer or any other connected device (better unplug all not needed USB devices).
 
-1. For pacman-key signature verification for **ArchLinux** only please edit gpg.conf file and add content below.
+1. For pacman-key signature verification for **ArchLinux** only, please edit gpg.conf file and add content below.
 ```bash
 # vim /etc/pacman.d/gnupg/gpg.conf
 # cat /etc/pacman.d/gnupg/gpg.conf
@@ -52,8 +53,13 @@ keyserver http://pgp.mit.edu
 #keyserver hkp://pool.sks-keyservers.net
 keyserver-options timeout=10
 ```
-Download ArchLinuxArm keyring file, sign it locally and to check verification.
+Download ArchLinuxArm keyring file, sign it locally and to check signature of ArchLinuxArm packages.
 ```bash
+# cd /opt/
+# pacman-key -r 77193F152BDBE6A6
+# pacman-key -f 77193F152BDBE6A6
+# pacman-key --lsign-key 77193F152BDBE6A6
+# pacman-key --populate archlinuxarm
 # curl -O http://ftp.halifax.rwth-aachen.de/archlinux-arm/aarch64/core/archlinuxarm-keyring-20140119-1-any.pkg.tar.xz
 # curl -O http://ftp.halifax.rwth-aachen.de/archlinux-arm/aarch64/core/archlinuxarm-keyring-20140119-1-any.pkg.tar.xz.sig
 # pacman-key --lsign-key builder@archlinuxarm.org
@@ -69,31 +75,37 @@ Download ArchLinuxArm keyring file, sign it locally and to check verification.
 4. At the fdisk prompt, create the new partitions:
   * Type **o**. This will clear out any partitions on the drive.
   * Type **p** to list partitions. There should be no partitions left.
-  * Type **n**, then **p** for primary, **1** for the first partition on the drive, and **enter** twice to accept the default starting and ending sectors.
+  * Type **n**, then **p** for primary, **1** for the first partition on the drive, press ENTER to accept the default first sector, then type **+512M** for the last sector.
+  * Type **t**, then **c** to set the first partition to type W95 FAT32 (LBA).
+  * Type **n**, then **p** for primary, **2** for the first partition on the drive, and **enter** twice to accept the default starting and ending sectors.
   * Write the partition table and exit by typing **w**.
 
   Check if the partition created and that it have Linux ID type **83**:
 ```bash
 # fdisk -l /dev/sdb
 .....
-Device     Boot Start     End Sectors  Size Id Type
-/dev/sdb1        2048 3921919 3919872  1,9G 83 Linux
+Device     Boot   Start     End Sectors  Size Id Type
+/dev/sdb1          2048 1050623 1048576  512M  c W95 FAT32 (LBA)
+/dev/sdb2       1050624 9439231 8388608    4G 83 Linux
 #
 ```
-5. Create the ext4 file system:
-  * For e2fsprogs < 1.43: `# mkfs.ext4 /dev/sdb1`
-  * For e2fsprogs >= 1.43: `# mkfs.ext4 -O ^metadata_csum,^64bit /dev/sdb1`
-6. Mount the file system. I am going to do everything in **/opt** . Make sure to have at least 1GB of free space available on your host machine under **/opt**.
+5. Create and mount the FAT filesystem: `mkfs.vfat /dev/sdX1`
+6. Create the ext4 file system. Find out which e2fsprogs you have `# pacman -Qi e2fsprogs`
+  * For e2fsprogs < 1.43: `# mkfs.ext4 /dev/sdX1`
+  * For e2fsprogs >= 1.43: `# mkfs.ext4 -O ^metadata_csum,^64bit /dev/sdX1`
+7. Mount the file system. I am going to do everything in **/opt** . Make sure to have at least 1GB of free space available on your host machine under **/opt**.
 ```bash
+# mkdir -p /opt/boot
+# mount /dev/sdX1 /opt/boot
 # mkdir -p /opt/root
-# mount /dev/sdb1 /opt/root
+# mount /dev/sdX2 /opt/root
 ```
-7. Download and extract the root file system:
+8. Download and extract the root file system:
 ```bash
 # cd /opt
-# wget http://archlinuxarm.org/os/ArchLinuxARM-aarch64-latest.tar.gz
-# wget http://de5.mirror.archlinuxarm.org/os/ArchLinuxARM-aarch64-latest.tar.gz.md5
-# wget http://de5.mirror.archlinuxarm.org/os/ArchLinuxARM-aarch64-latest.tar.gz.sig
+# curl -O http://de5.mirror.archlinuxarm.org/os/ArchLinuxARM-aarch64-latest.tar.gz
+# curl -O http://de5.mirror.archlinuxarm.org/os/ArchLinuxARM-aarch64-latest.tar.gz.md5
+# curl -O http://de5.mirror.archlinuxarm.org/os/ArchLinuxARM-aarch64-latest.tar.gz.sig
 ```
   verify checksum and signature of downloaded file (pacman-key only works on Arch Linux)
 ```bash
@@ -102,40 +114,28 @@ Device     Boot Start     End Sectors  Size Id Type
 # bsdtar -xpf ArchLinuxARM-aarch64-latest.tar.gz -C root/
 # sync
 ```
-8. Now that we have rootfs on our micro SD card, lets download latest mainline Kernel. In time of writing this HowTo that is 4.12-rc2
+9. Move boot files to the first partition:
 ```bash
-# wget http://ftp.halifax.rwth-aachen.de/archlinux-arm/aarch64/core/linux-aarch64-rc-4.12.rc5-1-aarch64.pkg.tar.xz
-# wget http://ftp.halifax.rwth-aachen.de/archlinux-arm/aarch64/core/linux-aarch64-rc-4.12.rc5-1-aarch64.pkg.tar.xz.sig
-# pacman-key -v linux-aarch64-rc-4.12.rc5-1-aarch64.pkg.tar.xz.sig
+# cd /opt
+# mv root/boot/* boot/
 ```
-9. We will need to force install Kernel, once booted into ArchLinuxARM, to have all files in right place. So move to micro SD card for later install:
-```bash
-# cp linux-aarch64-rc-4.12.rc5-1-aarch64.pkg.tar.xz root/opt/
-```
-10. for booting Khadas VIM we need these files on micro SD boot directory:
-```bash
-# mkdir kernel
-# bsdtar -xpf linux-aarch64-rc-4.12.rc5-1-aarch64.pkg.tar.xz -C kernel/
-# cp -p kernel/boot/Image* root/boot/
-# cp -R kernel/boot/dtbs/* root/boot/dtbs/
-# sync
-```
-11. on host machine install uboot-tools and create uImage (includes the OS type and loader information) which is needed by u-boot:
+9. on host machine install uboot-tools and create uImage (includes the OS type and loader information) which is needed by u-boot:
 ```shell
+# cd /opt
 # pacman -S uboot-tools
-# mkimage -A arm64 -O linux -T kernel -C none -a 0x1080000 -e 0x1080000 -n "Arch Linux ARM kernel" -d root/boot/Image root/boot/uImage
+# mkimage -A arm64 -O linux -T kernel -C none -a 0x1080000 -e 0x1080000 -n "Arch Linux ARM kernel" -d boot/Image boot/uImage
 ```
 output should be like this
 ```session
 Image Name:   Arch Linux ARM kernel
-Created:      Thu May 25 19:14:48 2017
+Created:      Thu Jul 27 11:11:51 2017
 Image Type:   AArch64 Linux Kernel Image (uncompressed)
-Data Size:    21561856 Bytes = 21056.50 KiB = 20.56 MiB
+Data Size:    21758464 Bytes = 21248.50 KiB = 20.75 MiB
 Load Address: 01080000
 Entry Point:  01080000
 ```
 12. Unmount the partition:
-` # umount /opt/root`
+` # umount /opt/root /opt/boot`
 
 ## On Khadas VIM Pro
 1. Insert the micro SD card in Khadas VIM device. On your host machine start some client which can communicate over Serial connection type (minicom, putty, etc.) For this part an USB to Serial TTL cable is needed as we need to stop autoboot process, to configure Khadas VIM Pro to boot from prepared micro SD card. So almost immediately after plugging USB-C plug to host machine or wall adapter you need to hit Enter or space or Ctrl+C key to stop autoboot, you will get u-boot prompt like this:
@@ -153,8 +153,8 @@ kvim#
 2. Now in u-boot run the following commands:
 ```bash
 kvim# setenv bootargs "console=ttyAML0,115200 root=/dev/mmcblk0p1 rootwait=1 rootdelay=2 rw ipv6.disable=1 init=/usr/bin/init"
-kvim# ext4load mmc 0:1 ${loadaddr} /boot/uImage
-kvim# ext4load mmc 0:1 $dtb_mem_addr /boot/dtbs/amlogic/meson-gxl-s905x-khadas-vim.dtb
+kvim# fatload mmc 0:1 ${loadaddr} /boot/uImage
+kvim# fatload mmc 0:1 $dtb_mem_addr /boot/dtbs/amlogic/meson-gxl-s905x-khadas-vim.dtb
 ```
   if everything successful then boot the ArchLinuxARM system on microSD card
 ```bash
@@ -162,7 +162,7 @@ kvim# bootm ${loadaddr} - $dtb_mem_addr
 ```
 3. Login into your newly installed ArchLinuxARM  with user: **root** and password: **root**
 ```session
-Arch Linux 4.12.0-rc5-1-ARCH (ttyAML0)
+Arch Linux 4.12.0-1-ARCH (ttyAML0)
 alarm login: root
 Password:
 [root@alarm ~]#
@@ -173,35 +173,8 @@ Check if we have any network device
 lo
 [root@alarm ~]#
 ```
-4. As long as ArchLinuxARM still ships Kernel v4.11.X by default we need to do following to have newest Kernel installed:
-```bash
-[root@alarm ~]# pacman -U --force /opt/linux-aarch64-rc-4.12.rc5-1-aarch64.pkg.tar.xz
-```
-  When asked to remove linux-aarch64 Kernel and install linux-aarch64-rc press **y**.
 
-  Reboot the system but please note you need to **stop autoboot** and to re-enter again all u-boot commands from above
-`[root@alarm ~]# systemctl reboot`
-5. As soon as you see u-boot stuff hit Enter or space or Ctrl+C key to stop autoboot.
-  Now in u-boot run again the following commands:
-```bash  
-kvim# setenv bootargs "console=ttyAML0,115200 root=/dev/mmcblk0p1 rootwait=1 rootdelay=2 rw ipv6.disable=1 init=/usr/bin/init"
-kvim# ext4load mmc 0:1 ${loadaddr} /boot/uImage
-kvim# ext4load mmc 0:1 $dtb_mem_addr /boot/dtbs/amlogic/meson-gxl-s905x-khadas-vim.dtb
-```
-  if everything successful then boot the ArchLinuxARM system on microSD card
-```bash
-kvim# bootm ${loadaddr} - $dtb_mem_addr
-```
-6. Login again into your newly installed ArchLinuxARM and check if you see now any network device
-```session
-Arch Linux 4.12.0-rc5-1-ARCH (ttyAML0)
-alarm login: root
-Password:
-[root@alarm ~]# ls /sys/class/net
-eth0  lo
-[root@alarm ~]#
-```
-7. As you can see we have eth0 now. For this time I will use dhcp to get IP. Don’t forget to connect network cable to Khadas VIM Pro device.
+4. As you can see we have eth0 now. For this time I will use dhcp to get IP. Don’t forget to connect network cable to Khadas VIM Pro device.
 ```bash
 [root@alarm ~]# systemctl enable dhcpcd@eth0.service
 Created symlink /etc/systemd/system/multi-user.target.wants/dhcpcd@eth0.service -> /usr/lib/systemd/system/dhcpcd@.service.
@@ -210,9 +183,9 @@ Created symlink /etc/systemd/system/multi-user.target.wants/dhcpcd@eth0.service 
 ```
   With last command you will get IP of your device.
 
-8. Now install openssh and enable root SSH login with password(this is security issue and should be only used when testing) and try to connect to your device.
+5. Now install openssh and enable root SSH login with password(this is security issue and should be only used when testing) and try to connect to your device.
 ```bash
-[root@alarm ~]# pacman -Sy openssh vim lshw
+[root@alarm ~]# pacman -Sy uboot-tools openssh vim lshw ethtool
 [root@alarm ~]# sed -i -e 's/\#PermitRootLogin.*/PermitRootLogin yes/' /etc/ssh/sshd_config
 [root@alarm ~]# systemctl restart sshd
 ```
@@ -259,7 +232,7 @@ Android u-boot end.
 3. Set the new bootargs and bootcmd to autoboot ArchLinuxArm from first partition on micro SD card. This is valid for any u-boot.
 ```bash
 kvim# setenv bootargs "console=ttyAML0,115200 root=/dev/mmcblk0p1 rootwait=1 rootdelay=2 rw ipv6.disable=1 init=/usr/bin/init"
-kvim# setenv bootcmd "ext4load mmc 0:1 ${loadaddr} /boot/uImage; ext4load mmc 0:1 $dtb_mem_addr /boot/dtbs/amlogic/meson-gxl-s905x-khadas-vim.dtb; bootm ${loadaddr} - $dtb_mem_addr"
+kvim# setenv bootcmd "fatload mmc 0:1 ${loadaddr} /boot/uImage; fatload mmc 0:1 $dtb_mem_addr /boot/dtbs/amlogic/meson-gxl-s905x-khadas-vim.dtb; bootm ${loadaddr} - $dtb_mem_addr"
 kvim# saveenv
 ```
 4. If everything successful then do an reset to check Autoboot.
@@ -267,6 +240,7 @@ kvim# saveenv
 kvim# reset
 ```
 ## Some information from ArchLinuxARM wiki:
+
 The default configuration of the userspace is:
 - Packages in the base group, Kernel firmware and utilities, openssh, and haveged
 - Default root password is root
@@ -348,7 +322,7 @@ LC_TIME=en_DK.utf8
 
 ## Know Problems:
 - [ ] USB is not supported on the mainline Linux Kernel yet, see [linux-meson](http://linux-meson.com/doku.php#wip) (Khadas VIM uses the S905X SoC, also called GXL -> USB is still work-in-progress)
-- [x] WiFi problem reported, solved with Heiner Kallweit patch, more about can be be found [here](http://lists.infradead.org/pipermail/linux-amlogic/2017-June/003864.html).
+- [x] WiFi problem reported, solved with Heiner Kallweit patch, more about can be be found [here](http://lists.infradead.org/pipermail/linux-amlogic/2017-June/003864.html). [Mainline commit](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=24835611a96e9b41ad57dd5024915106293be7e9).
 - [ ] Ethernet problems: sometimes detected only as 10Mbps and with 4.12-rc4 download will stall and SSH session would be disconnected. Reported [here](http://lists.infradead.org/pipermail/linux-amlogic/2017-June/003939.html)
 
 ## Authors and docummentation:
@@ -357,6 +331,7 @@ LC_TIME=en_DK.utf8
   * Me (vrabac) - and of course some stuff are written from me. I tested this and would like to give it to community so everyone can prepare ArchLinuxARM working on Khadas Vim device (this HowTo should work with some adjustment with any other arm device)
 
 ## Change log:
+- 20170727: rewrite to use Android u-boot because of multiboot activation.
 - 20170615: added ArchLinuxArm keyring and instruction how to use it on ArchLinux. Autboot to ArchLinuxArm on first partition of micro SD card.
 - 20170613: added 'ipv6.disable' to bootargs
 - 20170611: added hardware information section, moved know problems to task list
